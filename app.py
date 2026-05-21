@@ -7,7 +7,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics.pairwise import cosine_similarity
 
 st.set_page_config(
-    page_title="Spotify AI Recommender",
+    page_title="Music Recommender",
     page_icon="🎵",
     layout="wide"
 )

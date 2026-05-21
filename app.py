@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
+import plotly.graph_objects as go
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -221,7 +222,10 @@ with st.sidebar:
 # =====================================================
 
 def recommend(song_name, top_n=10):
-    selected_song = df[df['track_name'].str.lower() == song_name.lower()].iloc[0]
+    matches = df[df['track_name'].str.lower() == song_name.lower()]
+    # Prefer pop-film, then pop, then first available
+    preferred = matches[matches['track_genre'].isin(['pop-film', 'pop', 'indie-pop', 'hip-hop', 'r-n-b', 'rock', 'acoustic'])]
+    selected_song = preferred.iloc[0] if len(preferred) > 0 else matches.iloc[0]
     selected_artist = str(selected_song['artists']).split(";")[0]
     selected_genre = selected_song['track_genre']
 
@@ -424,38 +428,95 @@ if search and song_name:
         rec_valence = df[df['track_name'].isin(recommendations['track_name'])]['valence'].mean()
         mood_diff = abs(seed_valence - rec_valence)
         mood_consistency = 'High' if mood_diff < 0.15 else 'Medium' if mood_diff < 0.30 else 'Low'
+        mood_color = '#1DB954' if mood_consistency == 'High' else '#f59e0b' if mood_consistency == 'Medium' else '#e22134'
         unique_artists = recommendations['artists'].apply(lambda x: str(x).split(';')[0]).nunique()
 
-        st.markdown("<div style='margin-top:32px;'></div>", unsafe_allow_html=True)
-        st.html('<p style="color:#b3b3b3; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:16px;">Recommendation Analytics</p>')
+        st.markdown("<div style='margin-top:40px;'></div>", unsafe_allow_html=True)
+        st.html('<p style="color:#b3b3b3; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:20px;">Recommendation Analytics</p>')
 
+        # METRIC CARDS
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Avg Similarity", avg_similarity)
-        m2.metric("Artist Diversity", f"{unique_artists}/10")
-        m3.metric("Mood Consistency", mood_consistency)
-        m4.metric("Type", "Hybrid AI")
+        for col, label, value, color in [
+            (m1, "Avg Similarity", str(avg_similarity), "#1DB954"),
+            (m2, "Artist Diversity", f"{unique_artists}/10", "#1DB954"),
+            (m3, "Mood Consistency", mood_consistency, mood_color),
+            (m4, "Type", "Hybrid AI", "#1DB954"),
+        ]:
+            with col:
+                st.html(
+                    '<div style="background:#181818; border:1px solid #282828; border-radius:10px; padding:20px; text-align:center;">'
+                    '<p style="color:#6a6a6a; font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px;">' + label + '</p>'
+                    '<p style="color:' + color + '; font-size:28px; font-weight:800; margin:0;">' + value + '</p>'
+                    '</div>'
+                )
 
         st.markdown("<div style='margin-top:24px;'></div>", unsafe_allow_html=True)
 
-        # BAR CHART — match scores
         chart_col1, chart_col2 = st.columns(2)
 
+        # MATCH SCORE BAR CHART
         with chart_col1:
-            st.html('<p style="color:#b3b3b3; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px;">Match Scores</p>')
-            score_df = pd.DataFrame({
-                'Song': [str(r['track_name'])[:20] + '...' if len(str(r['track_name'])) > 20 else str(r['track_name']) for _, r in recommendations.iterrows()],
-                'Score': [round(r['score'], 3) for _, r in recommendations.iterrows()]
-            }).set_index('Song')
-            st.bar_chart(score_df, color='#1DB954')
+            song_labels = [str(r['track_name'])[:18] + '...' if len(str(r['track_name'])) > 18 else str(r['track_name']) for _, r in recommendations.iterrows()]
+            scores = [round(r['score'], 3) for _, r in recommendations.iterrows()]
 
+            fig1 = go.Figure(go.Bar(
+                x=scores,
+                y=song_labels,
+                orientation='h',
+                marker=dict(
+                    color=scores,
+                    colorscale=[[0, '#1a3a1a'], [1, '#1DB954']],
+                    line=dict(width=0)
+                ),
+                text=[str(s) for s in scores],
+                textposition='outside',
+                textfont=dict(color='#b3b3b3', size=11)
+            ))
+            fig1.update_layout(
+                title=dict(text='Match Scores', font=dict(color='#b3b3b3', size=12), x=0),
+                paper_bgcolor='#181818',
+                plot_bgcolor='#181818',
+                font=dict(color='#b3b3b3'),
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[0, max(scores) * 1.2]),
+                yaxis=dict(showgrid=False, tickfont=dict(size=11, color='#ffffff')),
+                margin=dict(l=10, r=40, t=40, b=10),
+                height=320
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+
+        # AUDIO FEATURES RADAR
         with chart_col2:
-            st.html('<p style="color:#b3b3b3; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px;">Audio Features — Seed Song</p>')
-            seed_features = selected_song_row[['danceability', 'energy', 'valence']]
-            feature_df = pd.DataFrame({
-                'Feature': ['Danceability', 'Energy', 'Valence'],
-                'Value': [round(seed_features['danceability'], 2), round(seed_features['energy'], 2), round(seed_features['valence'], 2)]
-            }).set_index('Feature')
-            st.bar_chart(feature_df, color='#1DB954')
+            feat_vals = [
+                round(float(selected_song_row['danceability']), 2),
+                round(float(selected_song_row['energy']), 2),
+                round(float(selected_song_row['valence']), 2),
+                round(float(selected_song_row['tempo']) / 250, 2),
+                round((float(selected_song_row['loudness']) + 60) / 64, 2)
+            ]
+            feat_labels = ['Danceability', 'Energy', 'Valence', 'Tempo', 'Loudness']
+
+            fig2 = go.Figure(go.Scatterpolar(
+                r=feat_vals + [feat_vals[0]],
+                theta=feat_labels + [feat_labels[0]],
+                fill='toself',
+                fillcolor='rgba(29, 185, 84, 0.15)',
+                line=dict(color='#1DB954', width=2),
+                marker=dict(color='#1DB954', size=6)
+            ))
+            fig2.update_layout(
+                title=dict(text='Audio Features', font=dict(color='#b3b3b3', size=12), x=0),
+                paper_bgcolor='#181818',
+                plot_bgcolor='#181818',
+                polar=dict(
+                    bgcolor='#181818',
+                    radialaxis=dict(visible=True, range=[0, 1], showticklabels=False, gridcolor='#282828', linecolor='#282828'),
+                    angularaxis=dict(tickfont=dict(color='#ffffff', size=11), gridcolor='#282828', linecolor='#282828')
+                ),
+                margin=dict(l=20, r=20, t=40, b=20),
+                height=320,
+                showlegend=False
+            )
+            st.plotly_chart(fig2, use_container_width=True)
 
     except Exception as e:
         st.markdown(

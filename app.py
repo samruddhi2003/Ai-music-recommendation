@@ -419,32 +419,43 @@ if search and song_name:
 
         # ANALYTICS
         selected_song_row = df[df['track_name'].str.lower() == song_name.lower()].iloc[0]
-        seed_genre = selected_song_row['track_genre']
         avg_similarity = round(recommendations['score'].mean(), 2)
         seed_valence = selected_song_row['valence']
         rec_valence = df[df['track_name'].isin(recommendations['track_name'])]['valence'].mean()
         mood_diff = abs(seed_valence - rec_valence)
         mood_consistency = 'High' if mood_diff < 0.15 else 'Medium' if mood_diff < 0.30 else 'Low'
-        mood_color = '#1DB954' if mood_consistency == 'High' else '#f59e0b' if mood_consistency == 'Medium' else '#e22134'
         unique_artists = recommendations['artists'].apply(lambda x: str(x).split(';')[0]).nunique()
-        artist_diversity_pct = int(unique_artists / len(recommendations) * 100)
 
         st.markdown("<div style='margin-top:32px;'></div>", unsafe_allow_html=True)
-        st.html(
-            '<p style="color:#b3b3b3; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:16px;">Recommendation Analytics</p>'
-            '<div style="background:#181818; border:1px solid #282828; border-radius:12px; padding:24px; display:grid; grid-template-columns:1fr 1fr; gap:20px;">'
-            '<div><p style="color:#6a6a6a; font-size:11px; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Artist Diversity</p>'
-            '<div style="display:flex; align-items:center; gap:10px;"><div style="background:#282828; border-radius:500px; height:6px; flex:1; overflow:hidden;"><div style="background:#1DB954; height:6px; width:' + str(artist_diversity_pct) + '%;"></div></div>'
-            '<span style="color:#FFFFFF; font-size:16px; font-weight:700;">' + str(unique_artists) + ' artists</span></div></div>'
-            '<div><p style="color:#6a6a6a; font-size:11px; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Avg Similarity</p>'
-            '<div style="display:flex; align-items:center; gap:10px;"><div style="background:#282828; border-radius:500px; height:6px; flex:1; overflow:hidden;"><div style="background:#1DB954; height:6px; width:' + str(int(avg_similarity * 100)) + '%;"></div></div>'
-            '<span style="color:#FFFFFF; font-size:16px; font-weight:700;">' + str(avg_similarity) + '</span></div></div>'
-            '<div><p style="color:#6a6a6a; font-size:11px; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Mood Consistency</p>'
-            '<span style="color:' + mood_color + '; font-size:16px; font-weight:700;">' + mood_consistency + '</span></div>'
-            '<div><p style="color:#6a6a6a; font-size:11px; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:8px;">Recommendation Type</p>'
-            '<span style="color:#FFFFFF; font-size:14px; font-weight:600;">Hybrid AI</span></div>'
-            '</div>'
-        )
+        st.html('<p style="color:#b3b3b3; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:16px;">Recommendation Analytics</p>')
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Avg Similarity", avg_similarity)
+        m2.metric("Artist Diversity", f"{unique_artists}/10")
+        m3.metric("Mood Consistency", mood_consistency)
+        m4.metric("Type", "Hybrid AI")
+
+        st.markdown("<div style='margin-top:24px;'></div>", unsafe_allow_html=True)
+
+        # BAR CHART — match scores
+        chart_col1, chart_col2 = st.columns(2)
+
+        with chart_col1:
+            st.html('<p style="color:#b3b3b3; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px;">Match Scores</p>')
+            score_df = pd.DataFrame({
+                'Song': [str(r['track_name'])[:20] + '...' if len(str(r['track_name'])) > 20 else str(r['track_name']) for _, r in recommendations.iterrows()],
+                'Score': [round(r['score'], 3) for _, r in recommendations.iterrows()]
+            }).set_index('Song')
+            st.bar_chart(score_df, color='#1DB954')
+
+        with chart_col2:
+            st.html('<p style="color:#b3b3b3; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px;">Audio Features — Seed Song</p>')
+            seed_features = selected_song_row[['danceability', 'energy', 'valence']]
+            feature_df = pd.DataFrame({
+                'Feature': ['Danceability', 'Energy', 'Valence'],
+                'Value': [round(seed_features['danceability'], 2), round(seed_features['energy'], 2), round(seed_features['valence'], 2)]
+            }).set_index('Feature')
+            st.bar_chart(feature_df, color='#1DB954')
 
     except Exception as e:
         st.markdown(

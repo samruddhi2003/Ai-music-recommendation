@@ -4,6 +4,19 @@ An AI-powered music recommendation web app built with Streamlit that suggests si
 
 ---
 
+## 📸 Screenshots
+
+### Homepage
+![Homepage](images/homepage.png)
+
+### Song Recommendations
+![Songs](images/songs.png)
+
+### Analytics
+![Analytics](images/analytics.png)
+
+---
+
 ## 🚀 How to Run
 
 ```bash

@@ -197,3 +197,52 @@ After recommendations are generated, real metrics are calculated:
 2. **MinMax scaling per genre** — scaler is fit on genre subset, not entire dataset, so scaling is relative to that genre's range
 3. **iTunes over Spotify** — avoids API authentication and premium subscription issues
 4. **`st.html()` for cards, `st.markdown()` for CSS** — `st.html()` renders in an iframe (safe sandbox), `st.markdown` with `unsafe_allow_html=True` injects CSS globally into the page
+
+---
+
+## 📈 Evaluation Metrics
+
+Since this is a content-based recommendation system with no user ratings, traditional ML metrics (accuracy, F1) don't apply. Instead, the following real-time metrics are calculated after every recommendation:
+
+### 1. Average Similarity Score
+- **What:** Mean cosine similarity of all 10 recommended songs with the seed song
+- **Range:** 0.0 – 1.2 (can exceed 1.0 due to artist boosting of 1.2×)
+- **Higher is better** — means recommendations are more sonically similar
+
+```python
+avg_similarity = round(recommendations['score'].mean(), 2)
+```
+
+### 2. Artist Diversity
+- **What:** Number of unique artists in the 10 recommendations
+- **Why it matters:** A good recommender should not just return all songs from one artist — it should expose the user to variety
+- **Formula:** `unique_artists / total_recommendations × 100`
+- **Higher is better** — 10/10 means all songs are from different artists
+
+```python
+unique_artists = recommendations['artists'].apply(lambda x: str(x).split(';')[0]).nunique()
+```
+
+### 3. Mood Consistency
+- **What:** Measures how closely the mood (valence) of recommendations matches the seed song
+- **Uses `valence`** — Spotify's measure of musical positiveness (0.0 = sad, 1.0 = happy)
+- **Formula:** `|seed_valence - avg_recommendation_valence|`
+
+| Difference | Mood Consistency |
+|---|---|
+| < 0.15 | 🟢 High |
+| 0.15 – 0.30 | 🟡 Medium |
+| ≥ 0.30 | 🔴 Low |
+
+```python
+mood_diff = abs(seed_valence - rec_valence)
+mood_consistency = 'High' if mood_diff < 0.15 else 'Medium' if mood_diff < 0.30 else 'Low'
+```
+
+### 4. Recommendation Type
+- **Hybrid AI** — combines two techniques:
+  - **Genre-based filtering** (rule-based) — narrows search space
+  - **Cosine similarity on audio features** (ML-based) — ranks by sonic similarity
+
+### Why not use Precision/Recall?
+Precision and Recall require ground truth — i.e., knowing which songs a user actually likes. Since this system has no user history or ratings, these metrics cannot be computed. The above proxy metrics are the standard evaluation approach for content-based recommender systems.
